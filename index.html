@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#12161c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>J.B. Hunt Fuel Stops</title>
+<style>
+  :root{
+    --bg:#12161c; --panel:#1a2029; --panel2:#222a35; --line:#2e3846;
+    --ink:#e9edf2; --dim:#93a0b1; --amber:#f2b23c;
+    --pilot:#e2483a; --flyingj:#3f7fd6; --loves:#f2c744; --ta:#57b96a; --jbh:#e07a2a;
+    --sb: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;overscroll-behavior:none}
+  body{background:var(--bg);color:var(--ink);
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  #app{display:flex;flex-direction:column;height:100dvh}
+
+  header{flex:0 0 auto;background:var(--panel);border-bottom:1px solid var(--line);
+    padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+  .titlebar{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+  h1{font-size:16px;font-weight:650;margin:0}
+  .count{font-size:12px;color:var(--dim)}
+  .row{display:flex;gap:8px}
+  input[type=search]{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);border-radius:10px;padding:11px 12px;font-size:16px}
+  input[type=search]::placeholder{color:#6f7d8e}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:11px 8px;font-size:14px;max-width:34%}
+  .tabs{display:flex;gap:6px;margin-top:8px}
+  .tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-weight:600;
+    background:var(--panel2);border:1px solid var(--line);color:var(--dim);cursor:pointer}
+  .tab.on{background:var(--amber);color:#1a1206;border-color:var(--amber)}
+
+  main{flex:1 1 auto;position:relative;min-height:0}
+  .hidden{display:none !important}
+
+  /* ---- map ---- */
+  #map{position:absolute;inset:0;overflow:hidden;background:#0d1116;touch-action:none;cursor:grab}
+  #map.drag{cursor:grabbing}
+  #tiles{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+  #tiles img{position:absolute;width:256px;height:256px;display:block;
+    image-rendering:auto;pointer-events:none;-webkit-user-drag:none}
+  #pins{position:absolute;inset:0;pointer-events:none}
+  .pin{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+    border:2px solid #0d1116;pointer-events:auto;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.6)}
+  .pin.sel{width:24px;height:24px;margin:-12px 0 0 -12px;border-color:#fff;z-index:5}
+  .me{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;
+    background:var(--amber);border:3px solid #12161c;z-index:6}
+  .mering{position:absolute;border-radius:50%;background:rgba(242,178,60,.14);
+    border:1px solid rgba(242,178,60,.5);z-index:4}
+
+  .mapbtns{position:absolute;right:12px;bottom:calc(14px + var(--sb));z-index:20;
+    display:flex;flex-direction:column;gap:8px}
+  .mbtn{width:50px;height:50px;border-radius:25px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);font-size:20px;font-weight:600;line-height:1;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  .mbtn.on{background:var(--amber);color:#1a1206;border-color:var(--amber)}
+  #attrib{position:absolute;left:6px;bottom:calc(4px + var(--sb));z-index:10;
+    font-size:10px;color:#6f7d8e;background:rgba(18,22,28,.7);padding:2px 6px;border-radius:4px}
+  #tiles.light img{filter:invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.8)}
+  #map.pick{cursor:crosshair}
+  #map.pick::after{content:"Tap where you are";position:absolute;left:50%;top:14px;
+    transform:translateX(-50%);background:var(--amber);color:#1a1206;font-weight:650;
+    font-size:13px;padding:7px 14px;border-radius:16px;z-index:18;pointer-events:none}
+  .me.manual{background:#7fb2f0}
+  #hint{position:absolute;left:12px;right:12px;top:12px;z-index:25;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:13px 14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.55)}
+  #hint b{font-size:14px}
+  #hint p{margin:6px 0 10px;font-size:13px;color:var(--dim);line-height:1.45}
+  #hint .btn{width:100%;flex:none;margin-top:6px}
+  #tilewarn{position:absolute;top:12px;left:12px;right:12px;z-index:15;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--dim)}
+
+  /* ---- cards ---- */
+  #list{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:8px 10px calc(20px + var(--sb))}
+  .stop{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--line);
+    border-radius:12px;padding:11px 12px;margin-bottom:8px}
+  .stop h2{font-size:15px;font-weight:650;margin:0 0 2px}
+  .meta{font-size:13px;color:var(--dim)}
+  .addr{font-size:14px;margin:5px 0 2px}
+  .hwy{font-size:13px;color:var(--amber);font-weight:600}
+  .dist{float:right;font-size:13px;color:var(--dim);font-weight:600}
+  .acts{display:flex;gap:8px;margin-top:10px}
+  .btn{flex:1;padding:11px 6px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--ink);font-size:14px;font-weight:600;
+    text-align:center;text-decoration:none;cursor:pointer;font-family:inherit}
+  .btn:active{background:#2c3644}
+  .btn.go{background:var(--amber);color:#1a1206;border-color:var(--amber)}
+  .btn.done{background:var(--ta);color:#08210e;border-color:var(--ta)}
+  .v-PILOT{border-left-color:var(--pilot)}
+  .v-FLYINGJ{border-left-color:var(--flyingj)}
+  .v-LOVES{border-left-color:var(--loves)}
+  .v-TAPETRO{border-left-color:var(--ta)}
+  .v-JBHUNT{border-left-color:var(--jbh)}
+  .empty{text-align:center;color:var(--dim);padding:40px 20px;font-size:14px}
+  .note{font-size:12px;color:var(--dim);text-align:center;padding:8px 16px 0;line-height:1.35}
+
+  #sheet{position:absolute;left:8px;right:8px;bottom:calc(8px + var(--sb));z-index:30;
+    background:var(--panel);border:1px solid var(--line);border-left-width:5px;
+    border-radius:14px;padding:12px 14px;box-shadow:0 -4px 24px rgba(0,0,0,.6)}
+  #sheet .x{position:absolute;top:8px;right:10px;color:var(--dim);font-size:22px;
+    line-height:1;padding:4px 8px;cursor:pointer}
+
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + var(--sb));
+    background:var(--ta);color:#08210e;padding:11px 20px;border-radius:22px;font-weight:650;
+    font-size:14px;z-index:2000;opacity:0;pointer-events:none;transition:opacity .18s}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="titlebar"><h1>J.B. Hunt Fuel Stops</h1><span class="count" id="count"></span></div>
+    <div class="row">
+      <input type="search" id="q" placeholder="Search city, exit, address" autocomplete="off">
+      <select id="state"><option value="">All states</option></select>
+      <select id="vendor"><option value="">All brands</option></select>
+    </div>
+    <div class="tabs"><div class="tab on" id="tabMap">Map</div><div class="tab" id="tabList">List</div></div>
+  </header>
+  <main>
+    <div id="map"><div id="tiles"></div><div id="pins"></div>
+      <div id="attrib">© OpenStreetMap, © CARTO</div>
+      <div class="mapbtns">
+        <button class="mbtn" id="zin">+</button>
+        <button class="mbtn" id="zout">−</button>
+        <button class="mbtn" id="locate">◎</button>
+      </div>
+    </div>
+    <div id="list" class="hidden"></div>
+  </main>
+</div>
+<div id="toast">Address copied</div>
+
+<script>
+const STOPS = [
+{n:"231814",s:"Flying J 637",c:"Waterloo",st:"IA",v:"FLYING J",a:"445 Evansdale Dr",h:"I-380 Exit 68",lat:42.4630,lng:-92.2900},
+{n:"516004",s:"Pilot 43",c:"Walcott",st:"IA",v:"PILOT",a:"3500 N Plainview Rd",h:"I-80 Exit 284",lat:41.6050,lng:-90.7750},
+{n:"516150",s:"Pilot 268",c:"Walcott",st:"IA",v:"PILOT",a:"2975 N Plainview Rd",h:"I-80 Exit 284",lat:41.6000,lng:-90.7730},
+{n:"516201",s:"Pilot 329",c:"Council Bluffs",st:"IA",v:"PILOT",a:"2647 S 24th St",h:"I-80 / I-29 Exit 1B",lat:41.2220,lng:-95.8550},
+{n:"516237",s:"Pilot 373",c:"Des Moines",st:"IA",v:"PILOT",a:"11957 Douglas Ave",h:"I-35 / I-80 Exit 126",lat:41.6300,lng:-93.7870},
+{n:"516267",s:"Pilot 407",c:"Clear Lake",st:"IA",v:"PILOT",a:"2411 US Hwy 18 E",h:"I-35 Exit 194",lat:43.1320,lng:-93.3520},
+{n:"516361",s:"Flying J 913",c:"Altoona",st:"IA",v:"FLYING J",a:"3132 Adventureland Dr",h:"I-80 Exit 142",lat:41.6570,lng:-93.4780},
+{n:"516884",s:"Flying J 893",c:"Avoca",st:"IA",v:"FLYING J",a:"7005 N Chestnut St",h:"I-80 Exit 40",lat:41.4820,lng:-95.3430},
+{n:"521847",s:"Pilot 1012",c:"Mount Pleasant",st:"IA",v:"PILOT",a:"1300 North Grand Ave",h:"Hwy 34 Exit 234",lat:40.9760,lng:-91.5500},
+
+{n:"231829",s:"Flying J 644",c:"La Salle",st:"IL",v:"FLYING J",a:"343 Civic Rd",h:"I-80 Exit 77",lat:41.3430,lng:-89.0610},
+{n:"231830",s:"Flying J 646",c:"South Beloit",st:"IL",v:"FLYING J",a:"16049 Willowbrook Rd",h:"I-90 Exit 1",lat:42.4800,lng:-89.0100},
+{n:"231856",s:"Flying J 643",c:"Effingham",st:"IL",v:"FLYING J",a:"1701 W Evergreen Ave",h:"I-57 / I-70 Exit 160",lat:39.1320,lng:-88.5700},
+{n:"231865",s:"Flying J 645",c:"Pontoon Beach",st:"IL",v:"FLYING J",a:"1310 Chain of Rocks Rd",h:"I-270 Exit 6B",lat:38.7230,lng:-90.0830},
+{n:"231892",s:"Flying J 642",c:"Alorton",st:"IL",v:"FLYING J",a:"140 Racehorse Dr",h:"I-255 Exit 17A",lat:38.5850,lng:-90.1000},
+{n:"514460",s:"TA 342",c:"Hampshire",st:"IL",v:"TA PETRO",a:"19N741 US-20",h:"I-90 Exit 42",lat:42.1000,lng:-88.5200},
+{n:"516001",s:"Pilot 39",c:"Monee",st:"IL",v:"PILOT",a:"600 Monee-Manhattan Rd",h:"I-57 Exit 335",lat:41.4180,lng:-87.7600},
+{n:"516124",s:"Pilot 236",c:"Minooka",st:"IL",v:"PILOT",a:"301 Ridge Road",h:"I-80 Exit 122",lat:41.4550,lng:-88.2900},
+{n:"516134",s:"Pilot 249",c:"Troy",st:"IL",v:"PILOT",a:"820 Edwardsville Rd",h:"I-55 / I-70 Exit 18",lat:38.7350,lng:-89.8950},
+{n:"516177",s:"Pilot 299",c:"Bloomington",st:"IL",v:"PILOT",a:"1522 W Market St",h:"I-55 / I-74 Exit 160",lat:40.4800,lng:-88.9980},
+{n:"516233",s:"Pilot 368",c:"Decatur",st:"IL",v:"PILOT",a:"4030 E Boyd Rd",h:"I-72 Exit 144",lat:39.8360,lng:-88.8780},
+{n:"516312",s:"Pilot 473",c:"Channahon",st:"IL",v:"PILOT",a:"23841 W Eames St",h:"I-55 Exit 248",lat:41.4280,lng:-88.2290},
+{n:"516314",s:"Pilot 482",c:"Mount Vernon",st:"IL",v:"PILOT",a:"4610 Broadway",h:"I-57 Exit 95",lat:38.3170,lng:-88.9300},
+{n:"516321",s:"Pilot 514",c:"Lincoln",st:"IL",v:"PILOT",a:"2903 Woodlawn Rd",h:"I-55 Exit 126",lat:40.1320,lng:-89.3940},
+{n:"517113",s:"Pilot 476",c:"Woodhull",st:"IL",v:"PILOT",a:"900 Plaza Avenue",h:"I-74 Exit 32",lat:41.1800,lng:-90.3100},
+{n:"517912",s:"Pilot 468",c:"Gilman",st:"IL",v:"PILOT",a:"815 Hwy 24 W",h:"I-57 Exit 283",lat:40.7670,lng:-87.9980},
+{n:"520275",s:"Pilot 171",c:"Oakwood",st:"IL",v:"PILOT",a:"503 N Oakwood Street",h:"I-74 Exit 206",lat:40.1170,lng:-87.7770},
+{n:"521005",s:"Love's 529",c:"Oglesby",st:"IL",v:"LOVES",a:"1001 W Walnut St",h:"I-39 Exit 54",lat:41.2970,lng:-89.0700},
+{n:"521414",s:"Pilot 483",c:"Morris",st:"IL",v:"PILOT",a:"3801 N Division St",h:"I-80 Exit 112",lat:41.3950,lng:-88.4200},
+{n:"522767",s:"Pilot 1030",c:"Alsip",st:"IL",v:"PILOT",a:"12680 S Kedzie",h:"I-57 Exit 353 / I-294",lat:41.6630,lng:-87.7000},
+{n:"522842",s:"Pilot 1024",c:"Joliet",st:"IL",v:"PILOT",a:"40 East Laraway Rd",h:"State Route 53 & Laraway",lat:41.4630,lng:-88.0700},
+{n:"523098",s:"Pilot 1041",c:"Carol Stream",st:"IL",v:"PILOT",a:"170 W North Ave",h:"North Ave / IL-64",lat:41.9070,lng:-88.1300},
+{n:"540628",s:"JBH Terminal",c:"Chicago",st:"IL",v:"JBHUNT",a:"3642 West 47th St",h:"47th St",lat:41.8070,lng:-87.7120},
+{n:"545797",s:"Petro 4359",c:"Rochelle",st:"IL",v:"TA PETRO",a:"900 Petro Drive",h:"I-39 Exit 99",lat:41.9000,lng:-89.0320},
+{n:"545799",s:"Petro 6359",c:"Rochelle",st:"IL",v:"TA PETRO",a:"900 Petro Drive",h:"I-39 at Route 38 Exit 99",lat:41.9005,lng:-89.0325},
+
+{n:"231004",s:"Flying J 649",c:"Indianapolis",st:"IN",v:"FLYING J",a:"1720 West Thompson Rd",h:"I-465 Exit 4",lat:39.6800,lng:-86.1850},
+{n:"231844",s:"Flying J 647",c:"Haubstadt",st:"IN",v:"FLYING J",a:"844 E 1250 S",h:"I-64 Exit 25B",lat:38.2070,lng:-87.5700},
+{n:"231848",s:"Flying J 650",c:"Lake Station",st:"IN",v:"FLYING J",a:"1401 Ripley St",h:"I-94 Exit 15B",lat:41.5730,lng:-87.2500},
+{n:"231849",s:"Flying J 653",c:"Lowell",st:"IN",v:"FLYING J",a:"3231 E 181st St",h:"I-65 Exit 240",lat:41.2970,lng:-87.4000},
+{n:"231864",s:"Flying J 656",c:"Whiteland",st:"IN",v:"FLYING J",a:"4982 N 350 East",h:"I-65 Exit 95",lat:39.5820,lng:-86.0700},
+{n:"515993",s:"Pilot 28",c:"Daleville",st:"IN",v:"PILOT",a:"15151 Commerce Rd",h:"I-69 Exit 234",lat:40.1170,lng:-85.5750},
+{n:"515994",s:"Pilot 29",c:"Fremont",st:"IN",v:"PILOT",a:"6900 N Old 27 Hwy",h:"I-69 Exit 357 / I-80 Exit 144",lat:41.7400,lng:-84.9300},
+{n:"515999",s:"Pilot 36",c:"Valparaiso",st:"IN",v:"PILOT",a:"4105 E US 30",h:"US 30 & SR 49",lat:41.4550,lng:-87.0100},
+{n:"516129",s:"Pilot 242",c:"Shelbyville",st:"IN",v:"PILOT",a:"1851 West 400 North",h:"I-74 Exit 109",lat:39.5770,lng:-85.8300},
+{n:"516133",s:"Pilot 247",c:"Crawfordsville",st:"IN",v:"PILOT",a:"4403 IN 32",h:"I-74 Exit 39",lat:40.0400,lng:-86.9800},
+{n:"516153",s:"Pilot 271",c:"Gary",st:"IN",v:"PILOT",a:"2501 Burr St",h:"I-80 / I-94 Exit 6",lat:41.5900,lng:-87.3950},
+{n:"516297",s:"Pilot 444",c:"Brazil",st:"IN",v:"PILOT",a:"4376 N State Rd 59",h:"I-70 Exit 23",lat:39.5600,lng:-87.1150},
+{n:"516298",s:"Pilot 445",c:"Chesterton",st:"IN",v:"PILOT",a:"243 Mountain Rd",h:"I-94 Exit 22A",lat:41.6100,lng:-87.0770},
+{n:"516299",s:"Pilot 446",c:"Daleville",st:"IN",v:"PILOT",a:"15876 West Commerce Rd",h:"I-69 Exit 234",lat:40.1170,lng:-85.5800},
+{n:"516300",s:"Pilot 447",c:"Haubstadt",st:"IN",v:"PILOT",a:"1042 Warrenton Rd",h:"I-64 Exit 25B",lat:38.2050,lng:-87.5750},
+{n:"516301",s:"Pilot 448",c:"Hebron",st:"IN",v:"PILOT",a:"18011 Colorado St",h:"I-65 Exit 240",lat:41.3000,lng:-87.3100},
+{n:"516313",s:"Pilot 478",c:"Leavenworth",st:"IN",v:"PILOT",a:"6921 S State Road 66",h:"I-64 Exit 92",lat:38.2200,lng:-86.3200},
+{n:"518608",s:"Flying J 304",c:"New Haven",st:"IN",v:"FLYING J",a:"3105 Doyle Road",h:"I-469 Exit 19 & Hwy 30",lat:41.0550,lng:-85.0200},
+
+{n:"516224",s:"Pilot 358",c:"Paducah",st:"KY",v:"PILOT",a:"5353 Cairo Rd",h:"I-24 Exit 3",lat:37.1280,lng:-88.7400},
+
+{n:"516064",s:"Pilot 134",c:"St Cloud",st:"MN",v:"PILOT",a:"4231 Clearwater Rd",h:"I-94 Exit 171",lat:45.5050,lng:-94.2200},
+{n:"518131",s:"Pilot 581",c:"Inver Grove Heights",st:"MN",v:"PILOT",a:"11650 Courthouse Blvd",h:"Hwy 52 & 117th St",lat:44.7830,lng:-93.0100},
+{n:"518151",s:"Flying J 576",c:"Northfield",st:"MN",v:"FLYING J",a:"8051 Bagley Avenue",h:"I-35 Exit 69",lat:44.5200,lng:-93.1850},
+{n:"542159",s:"Love's 844",c:"Saint Charles",st:"MN",v:"LOVES",a:"2102 Enterprise Dr",h:"I-90 Exit 233",lat:43.9680,lng:-92.0750},
+
+{n:"231022",s:"Flying J 674",c:"Warrenton",st:"MO",v:"FLYING J",a:"1 Camp Branch Rd",h:"I-70 Exit 188",lat:38.8150,lng:-91.1550},
+{n:"231052",s:"Flying J 672",c:"Peculiar",st:"MO",v:"FLYING J",a:"700 Hwy J",h:"I-49 Exit 167",lat:38.7170,lng:-94.4600},
+{n:"231077",s:"Flying J 671",c:"Matthews",st:"MO",v:"FLYING J",a:"703 State Hwy 80",h:"I-55 Exit 58",lat:36.7660,lng:-89.5850},
+{n:"231080",s:"Flying J 673",c:"Sullivan",st:"MO",v:"FLYING J",a:"825 N Loop Dr",h:"I-44 Exit 226",lat:38.2300,lng:-91.1700},
+{n:"231081",s:"Flying J 669",c:"Joplin",st:"MO",v:"FLYING J",a:"11570 Hwy FF",h:"I-44 Exit 11A",lat:37.0750,lng:-94.4000},
+{n:"231095",s:"Flying J 768",c:"Kansas City",st:"MO",v:"FLYING J",a:"1300 N Corrington Ave",h:"I-435 Exit 57",lat:39.1300,lng:-94.4800},
+{n:"231897",s:"Flying J 675",c:"Wayland",st:"MO",v:"FLYING J",a:"102 Fore Dr",h:"Hwy 136 / Hwy 27",lat:40.3950,lng:-91.5900},
+{n:"231981",s:"Flying J 1061",c:"Springfield",st:"MO",v:"FLYING J",a:"4939 W Chestnut Expressway",h:"I-44 Exit 72",lat:37.2200,lng:-93.3900},
+{n:"516105",s:"Pilot 208",c:"Pacific",st:"MO",v:"PILOT",a:"1475 Thornton St",h:"I-44 Exit 257",lat:38.4850,lng:-90.7400},
+{n:"516193",s:"Pilot 317",c:"Joplin",st:"MO",v:"PILOT",a:"4500 Hwy 43 S",h:"I-44 Exit 4",lat:37.0100,lng:-94.4700},
+{n:"516296",s:"Pilot 443",c:"Higginsville",st:"MO",v:"PILOT",a:"6676 Hwy 13",h:"I-70 Exit 49",lat:39.0750,lng:-93.7200},
+{n:"516533",s:"Love's 235",c:"Saint Joseph",st:"MO",v:"LOVES",a:"4601 S Leonard Rd",h:"I-29 Exit 44",lat:39.7000,lng:-94.8450},
+{n:"516600",s:"Love's 313",c:"Matthews",st:"MO",v:"LOVES",a:"100 Loves Industrial Dr",h:"I-55 Exit 58",lat:36.7700,lng:-89.5900},
+{n:"517831",s:"Pilot 385",c:"Collins",st:"MO",v:"PILOT",a:"9890 SE Missouri 13",h:"US 54 & Hwy 13 South",lat:37.9000,lng:-93.6150},
+{n:"518223",s:"Flying J 571",c:"Charleston",st:"MO",v:"FLYING J",a:"2460 E Hwy 60",h:"I-57 Exit 12",lat:36.9200,lng:-89.3200},
+{n:"520604",s:"Love's 488",c:"Bloomsdale",st:"MO",v:"LOVES",a:"8349 Enterprise Dr",h:"I-55 Exit 157",lat:38.0100,lng:-90.2350},
+{n:"522412",s:"Love's 621",c:"Bevier",st:"MO",v:"LOVES",a:"1402 State Hwy O",h:"US 36 Exit Rt O",lat:39.7500,lng:-92.5650},
+
+{n:"231038",s:"Flying J 685",c:"Fargo",st:"ND",v:"FLYING J",a:"3150 39th Street SW",h:"I-29 Exit 62",lat:46.8300,lng:-96.8600},
+{n:"517888",s:"Flying J 489",c:"Grand Forks",st:"ND",v:"FLYING J",a:"4401 S 32nd Ave",h:"I-29 Exit 138",lat:47.8780,lng:-97.0900},
+
+{n:"231021",s:"Flying J 700",c:"Perrysburg",st:"OH",v:"FLYING J",a:"26415 Warns Rd",h:"I-280 Exit 1B",lat:41.5450,lng:-83.5450},
+{n:"231827",s:"Flying J 694",c:"Austinburg",st:"OH",v:"FLYING J",a:"2349 Center Rd",h:"I-90 Exit 223",lat:41.7600,lng:-80.8600},
+{n:"231861",s:"Flying J 698",c:"Jeffersonville",st:"OH",v:"FLYING J",a:"9935 State Route 41",h:"I-71 Exit 69",lat:39.6550,lng:-83.5600},
+{n:"514625",s:"Petro 6325",c:"North Baltimore",st:"OH",v:"TA PETRO",a:"12906 Deshler Rd",h:"I-75 Exit 167",lat:41.1800,lng:-83.6400},
+{n:"515976",s:"Pilot 2",c:"Austinburg",st:"OH",v:"PILOT",a:"2246 State Route 45",h:"I-90 Exit 223",lat:41.7550,lng:-80.8600},
+{n:"515978",s:"Pilot 4",c:"Avon",st:"OH",v:"PILOT",a:"39115 Colorado Rd",h:"I-90 Exit 151",lat:41.4500,lng:-82.0300},
+{n:"515979",s:"Pilot 6",c:"Cambridge",st:"OH",v:"PILOT",a:"61700 Southgate Road",h:"I-70 Exit 178",lat:39.9850,lng:-81.5600},
+{n:"515980",s:"Pilot 8",c:"Circleville",st:"OH",v:"PILOT",a:"25600 US 23",h:"US 23 Pittsburg Rd",lat:39.6400,lng:-83.0100},
+{n:"515981",s:"Pilot 9",c:"Franklin",st:"OH",v:"PILOT",a:"6830 Franklin Lebanon Rd",h:"I-75 Exit 36",lat:39.5450,lng:-84.2900},
+{n:"515982",s:"Pilot 11",c:"North Lima",st:"OH",v:"PILOT",a:"10920 Market St",h:"I-76 Exit 232",lat:40.9500,lng:-80.6600},
+{n:"515985",s:"Pilot 14",c:"Sunbury",st:"OH",v:"PILOT",a:"7680 E State Route 36",h:"I-71 Exit 131",lat:40.2450,lng:-82.8550},
+{n:"515986",s:"Pilot 15",c:"Toledo",st:"OH",v:"PILOT",a:"5820 Hagman Rd",h:"I-75 Exit 210",lat:41.7200,lng:-83.5450},
+{n:"516061",s:"Pilot 130",c:"Richfield",st:"OH",v:"PILOT",a:"5219 Brecksville Rd",h:"I-77 Exit 146 / I-80 Exit 173",lat:41.2400,lng:-81.6400},
+{n:"516126",s:"Pilot 239",c:"Upper Sandusky",st:"OH",v:"PILOT",a:"1600 W Wyandot Ave",h:"State Hwy 23 & State Hwy 30",lat:40.8350,lng:-83.3100},
+{n:"516161",s:"Pilot 281",c:"Girard",st:"OH",v:"PILOT",a:"2786 Salt Springs Rd",h:"I-80 Exit 226",lat:41.1500,lng:-80.7200},
+{n:"516164",s:"Pilot 285",c:"Hebron",st:"OH",v:"PILOT",a:"10258 Lancaster Rd SW",h:"I-70 Exit 126",lat:39.9550,lng:-82.4900},
+{n:"516166",s:"Pilot 287",c:"Burbank",st:"OH",v:"PILOT",a:"10048 Avon Lake Rd",h:"I-71 Exit 204",lat:40.9400,lng:-81.9800},
+{n:"516181",s:"Pilot 303",c:"Napoleon",st:"OH",v:"PILOT",a:"905 American Road",h:"US 6 / US 24 Exit 41",lat:41.3950,lng:-84.1000},
+{n:"516186",s:"Pilot 309",c:"Caldwell",st:"OH",v:"PILOT",a:"44133 Fairground Rd",h:"I-77 Exit 25",lat:39.7400,lng:-81.5200},
+{n:"516226",s:"Pilot 360",c:"Findlay",st:"OH",v:"PILOT",a:"11471 State Rd 61B",h:"I-75 Exit 164",lat:41.0800,lng:-83.6300},
+{n:"516305",s:"Pilot 454",c:"London",st:"OH",v:"PILOT",a:"1365 State Rd 42 NE",h:"I-70 Exit 79",lat:39.9250,lng:-83.4000},
+{n:"519630",s:"Pilot 469",c:"Canton",st:"OH",v:"PILOT",a:"2320 Faircrest Street",h:"I-77 Exit 101",lat:40.7550,lng:-81.3900},
+{n:"521469",s:"Pilot 597",c:"Chillicothe",st:"OH",v:"PILOT",a:"1111 E Main St",h:"E Main St",lat:39.3350,lng:-82.9650},
+
+{n:"514542",s:"TA 5048",c:"Janesville",st:"WI",v:"TA PETRO",a:"3222 Humes Rd",h:"I-90 / I-39 Exit 171",lat:42.7200,lng:-89.0100},
+{n:"516002",s:"Pilot 40",c:"Oak Creek",st:"WI",v:"PILOT",a:"2031 West Ryan Rd",h:"I-94 Exit 322",lat:42.8850,lng:-87.9300},
+{n:"516082",s:"Pilot 164",c:"Mauston",st:"WI",v:"PILOT",a:"1101 Gateway Ave",h:"I-90 / I-94 Exit 69",lat:43.7950,lng:-90.0750},
+{n:"516198",s:"Pilot 324",c:"Franksville",st:"WI",v:"PILOT",a:"13712 Northwestern Ave",h:"I-94 Exit 329",lat:42.7800,lng:-87.9600},
+{n:"518609",s:"Flying J 470",c:"Roberts",st:"WI",v:"FLYING J",a:"1191 70th Ave",h:"US 65 & I-94",lat:44.9850,lng:-92.5450},
+{n:"521717",s:"Love's 587",c:"Fond du Lac",st:"WI",v:"LOVES",a:"191 West Rolling Meadow",h:"I-41 Exit 97",lat:43.8150,lng:-88.4800},
+{n:"524775",s:"Love's 640",c:"Sheboygan",st:"WI",v:"LOVES",a:"6710 S Business Dr",h:"I-43 Exit 120",lat:43.7000,lng:-87.7400},
+{n:"524832",s:"Petro 6403",c:"Portage",st:"WI",v:"TA PETRO",a:"5800 Kinney Road",h:"I-90 / I-94 Exit 108",lat:43.5600,lng:-89.4800}
+];
+
+const COLORS={"PILOT":"#e2483a","FLYING J":"#3f7fd6","LOVES":"#f2c744","TA PETRO":"#57b96a","JBHUNT":"#e07a2a"};
+const vclass=v=>"v-"+v.replace(/[^A-Z]/g,"");
+const fullAddr=s=>`${s.a}, ${s.c}, ${s.st}`;
+const esc=t=>String(t).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+/* ================= map engine ================= */
+const mapEl=document.getElementById('map'),tilesEl=document.getElementById('tiles'),pinsEl=document.getElementById('pins');
+const TS=256, MINZ=3, MAXZ=17;
+let view={lat:41.6,lng:-88.2,z:5};
+let W=0,H=0;
+
+function project(lat,lng,z){
+  const world=TS*Math.pow(2,z);
+  const x=(lng+180)/360*world;
+  const s=Math.max(-0.9999,Math.min(0.9999,Math.sin(lat*Math.PI/180)));
+  const y=(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*world;
+  return {x,y};
+}
+function unproject(x,y,z){
+  const world=TS*Math.pow(2,z);
+  const lng=x/world*360-180;
+  const n=Math.PI-2*Math.PI*y/world;
+  const lat=180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n)));
+  return {lat,lng};
+}
+function measure(){ W=mapEl.clientWidth; H=mapEl.clientHeight; }
+
+const TILE_SOURCES=[
+  {u:(z,x,y)=>`https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`,dark:true,a:'\u00a9 OpenStreetMap, \u00a9 CARTO'},
+  {u:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`,dark:false,a:'\u00a9 OpenStreetMap contributors'}
+];
+let srcIdx=0,tileCache={},tileFail=0,tileOk=0,tileWarned=false;
+
+function clearTiles(){ tilesEl.innerHTML=''; tileCache={}; }
+function nextSource(){
+  if(srcIdx<TILE_SOURCES.length-1){
+    srcIdx++; tileFail=0; tileOk=0; clearTiles();
+    tilesEl.classList.toggle('light',!TILE_SOURCES[srcIdx].dark);
+    document.getElementById('attrib').textContent=TILE_SOURCES[srcIdx].a;
+    draw();
+  } else tileWarn();
+}
+function tileWarn(){
+  if(tileWarned) return; tileWarned=true;
+  banner("Map imagery is blocked here","Road imagery loads from the internet, and this window won't allow it. The pins, distances and List tab all still work. To get the road map, save this file and open it in Safari or Chrome.");
+}
+function drawTiles(){
+  const iz=Math.max(MINZ,Math.min(MAXZ,Math.round(view.z)));
+  const scale=Math.pow(2,view.z-iz);
+  const c=project(view.lat,view.lng,iz);
+  tilesEl.style.transform=`translate(${W/2-c.x*scale}px,${H/2-c.y*scale}px) scale(${scale})`;
+  const n=Math.pow(2,iz);
+  const x0=Math.floor((c.x-W/2/scale)/TS),x1=Math.floor((c.x+W/2/scale)/TS);
+  const y0=Math.floor((c.y-H/2/scale)/TS),y1=Math.floor((c.y+H/2/scale)/TS);
+  const keep={};
+  for(let ty=y0;ty<=y1;ty++){
+    if(ty<0||ty>=n) continue;
+    for(let tx=x0;tx<=x1;tx++){
+      const wx=((tx%n)+n)%n, key=iz+'/'+wx+'/'+ty+'/'+tx;
+      keep[key]=1;
+      if(!tileCache[key]){
+        const img=document.createElement('img');
+        img.style.left=(tx*TS)+'px'; img.style.top=(ty*TS)+'px';
+        img.decoding='async'; img.referrerPolicy='no-referrer';
+        img.onload=()=>{tileOk++;};
+        img.onerror=()=>{ tileFail++; if(!tileOk&&tileFail>=4) nextSource(); };
+        img.src=TILE_SOURCES[srcIdx].u(iz,wx,ty);
+        tilesEl.appendChild(img); tileCache[key]=img;
+      }
+    }
+  }
+  for(const k in tileCache){
+    if(keep[k]) tileCache[k].style.display='';
+    else if(k.split('/')[0]!=String(iz)){ tileCache[k].remove(); delete tileCache[k]; }
+    else tileCache[k].style.display='none';
+  }
+}
+
+/* dismissable banner */
+function banner(title,body){
+  const old=document.getElementById('hint'); if(old) old.remove();
+  const d=document.createElement('div'); d.id='hint';
+  d.innerHTML=`<b>${title}</b><p>${body}</p><button class="btn" onclick="this.parentElement.remove()">Got it</button>`;
+  mapEl.appendChild(d);
+}
+
+/* pins */
+const pinEls=STOPS.map((s,i)=>{
+  const el=document.createElement('div');
+  el.className='pin'; el.style.background=COLORS[s.v]||'#999';
+  el.addEventListener('click',ev=>{ ev.stopPropagation(); selectStop(i); });
+  pinsEl.appendChild(el); return el;
+});
+let visibleIdx=new Set(STOPS.map((_,i)=>i));
+let selected=null;
+
+function drawPins(){
+  const c=project(view.lat,view.lng,view.z);
+  STOPS.forEach((s,i)=>{
+    const el=pinEls[i];
+    if(!visibleIdx.has(i)){ el.style.display='none'; return; }
+    const p=project(s.lat,s.lng,view.z);
+    const x=p.x-c.x+W/2, y=p.y-c.y+H/2;
+    if(x<-30||y<-30||x>W+30||y>H+30){ el.style.display='none'; return; }
+    el.style.display=''; el.style.left=x+'px'; el.style.top=y+'px';
+    el.classList.toggle('sel',selected===i);
+  });
+  if(here){
+    if(!meEl){ meEl=document.createElement('div'); meEl.className='me'; pinsEl.appendChild(meEl);
+      meRing=document.createElement('div'); meRing.className='mering'; pinsEl.insertBefore(meRing,meEl); }
+    const p=project(here.lat,here.lng,view.z);
+    const x=p.x-c.x+W/2, y=p.y-c.y+H/2;
+    meEl.style.left=x+'px'; meEl.style.top=y+'px';
+    meEl.classList.toggle('manual',!!here.manual);
+    meRing.style.display=here.manual?'none':'';
+    const mPerPx=156543.03*Math.cos(here.lat*Math.PI/180)/Math.pow(2,view.z);
+    const r=Math.max(10,Math.min(160,(here.acc||200)/mPerPx));
+    meRing.style.width=(r*2)+'px'; meRing.style.height=(r*2)+'px';
+    meRing.style.left=(x-r)+'px'; meRing.style.top=(y-r)+'px';
+  }
+}
+let meEl=null,meRing=null;
+
+let raf=null;
+function draw(){ if(raf) return; raf=requestAnimationFrame(()=>{ raf=null; measure(); drawTiles(); drawPins(); }); }
+
+function setView(lat,lng,z){
+  view.lat=lat; view.lng=lng;
+  if(z!=null) view.z=Math.max(MINZ,Math.min(MAXZ,z));
+  view.lat=Math.max(-85,Math.min(85,view.lat));
+  draw();
+}
+function panBy(dx,dy){
+  const c=project(view.lat,view.lng,view.z);
+  const ll=unproject(c.x-dx,c.y-dy,view.z);
+  setView(ll.lat,ll.lng);
+}
+function zoomAround(newZ,sx,sy){
+  newZ=Math.max(MINZ,Math.min(MAXZ,newZ));
+  const c=project(view.lat,view.lng,view.z);
+  const anchor=unproject(c.x+(sx-W/2),c.y+(sy-H/2),view.z);
+  view.z=newZ;
+  const a2=project(anchor.lat,anchor.lng,newZ);
+  const ll=unproject(a2.x-(sx-W/2),a2.y-(sy-H/2),newZ);
+  setView(ll.lat,ll.lng);
+}
+function fitBounds(pts,pad){
+  if(!pts.length) return;
+  let n=-90,s=90,e=-180,w=180;
+  pts.forEach(p=>{n=Math.max(n,p.lat);s=Math.min(s,p.lat);e=Math.max(e,p.lng);w=Math.min(w,p.lng);});
+  measure();
+  if(pts.length===1){ setView(s,w,11); return; }
+  let z=MAXZ;
+  for(;z>MINZ;z--){
+    const a=project(n,w,z), b=project(s,e,z);
+    if((b.x-a.x)<W-2*pad && (b.y-a.y)<H-2*pad) break;
+  }
+  const cx=(project(n,w,z).x+project(s,e,z).x)/2, cy=(project(n,w,z).y+project(s,e,z).y)/2;
+  const ll=unproject(cx,cy,z);
+  setView(ll.lat,ll.lng,z);
+}
+
+/* gestures */
+const ptrs=new Map();
+let last=null, pinchStart=null, moved=0, tapTime=0;
+mapEl.addEventListener('pointerdown',e=>{
+  mapEl.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  moved=0;
+  if(ptrs.size===1){ last={x:e.clientX,y:e.clientY}; mapEl.classList.add('drag'); }
+  if(ptrs.size===2){
+    const [a,b]=[...ptrs.values()];
+    pinchStart={d:Math.hypot(a.x-b.x,a.y-b.y),z:view.z};
+  }
+});
+mapEl.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===1&&last){
+    const dx=e.clientX-last.x, dy=e.clientY-last.y;
+    moved+=Math.abs(dx)+Math.abs(dy);
+    last={x:e.clientX,y:e.clientY};
+    panBy(dx,dy);
+  } else if(ptrs.size===2&&pinchStart){
+    const [a,b]=[...ptrs.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    const r=mapEl.getBoundingClientRect();
+    const mx=(a.x+b.x)/2-r.left, my=(a.y+b.y)/2-r.top;
+    if(d>0) zoomAround(pinchStart.z+Math.log2(d/pinchStart.d),mx,my);
+  }
+});
+function endPtr(e){
+  ptrs.delete(e.pointerId);
+  if(ptrs.size<2) pinchStart=null;
+  if(ptrs.size===0){
+    mapEl.classList.remove('drag'); last=null;
+    if(moved<8){
+      const r=mapEl.getBoundingClientRect();
+      if(pickMode){
+        const c=project(view.lat,view.lng,view.z);
+        const ll=unproject(c.x+(e.clientX-r.left-W/2),c.y+(e.clientY-r.top-H/2),view.z);
+        pickMode=false; locateBtn.textContent='\u25ce'; mapEl.classList.remove('pick');
+        setHere(ll.lat,ll.lng,0,true); toast("Spot set");
+        return;
+      }
+      const now=Date.now();
+      if(now-tapTime<300){
+        zoomAround(view.z+1,e.clientX-r.left,e.clientY-r.top);
+        tapTime=0;
+      } else tapTime=now;
+    }
+  } else if(ptrs.size===1){ const p=[...ptrs.values()][0]; last={x:p.x,y:p.y}; }
+}
+mapEl.addEventListener('pointerup',endPtr);
+mapEl.addEventListener('pointercancel',endPtr);
+mapEl.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=mapEl.getBoundingClientRect();
+  zoomAround(view.z-Math.sign(e.deltaY)*0.5,e.clientX-r.left,e.clientY-r.top);
+},{passive:false});
+document.getElementById('zin').onclick=()=>zoomAround(Math.round(view.z)+1,W/2,H/2);
+document.getElementById('zout').onclick=()=>zoomAround(Math.round(view.z)-1,W/2,H/2);
+window.addEventListener('resize',()=>{measure();draw();});
+
+/* ================= detail sheet ================= */
+function selectStop(i){
+  selected=i; drawPins();
+  const s=STOPS[i];
+  let el=document.getElementById('sheet');
+  if(!el){ el=document.createElement('div'); el.id='sheet'; mapEl.parentElement.appendChild(el); }
+  el.className=vclass(s.v);
+  const d=here?miles(here,s):null;
+  el.innerHTML=`<div class="x" onclick="closeSheet()">×</div>
+    ${d!==null?`<span class="dist">${fmtMi(d)}</span>`:""}
+    <h2 style="margin:0 0 2px;font-size:16px">${esc(s.s)}</h2>
+    <div class="meta">${esc(s.c)}, ${s.st} · #${s.n}</div>
+    <div class="addr">${esc(s.a)}</div>
+    <div class="hwy">${esc(s.h)}</div>
+    <div class="acts">
+      <button class="btn" onclick="copyAddr(${i},this)">Copy address</button>
+      <a class="btn go" target="_blank" rel="noopener" href="${mapsLink(s)}">Directions</a>
+    </div>`;
+}
+function closeSheet(){ const el=document.getElementById('sheet'); if(el) el.remove(); selected=null; drawPins(); }
+mapEl.addEventListener('click',e=>{ if(e.target===mapEl||e.target===pinsEl) closeSheet(); });
+const mapsLink=s=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr(s))}`;
+const fmtMi=d=> d<10 ? d.toFixed(1)+" mi" : Math.round(d)+" mi";
+
+/* ================= copy ================= */
+function copyAddr(i,btn){
+  const text=fullAddr(STOPS[i]);
+  const ok=()=>{ if(btn){const t=btn.textContent;btn.textContent="Copied";btn.classList.add("done");
+    setTimeout(()=>{btn.textContent=t;btn.classList.remove("done")},1400);} toast("Address copied"); };
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(text).then(ok).catch(()=>legacy(text,ok));
+  } else legacy(text,ok);
+}
+function legacy(text,ok){
+  const ta=document.createElement('textarea');
+  ta.value=text; ta.contentEditable=true; ta.readOnly=false;
+  ta.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+  document.body.appendChild(ta);
+  const range=document.createRange(); range.selectNodeContents(ta);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  ta.setSelectionRange(0,999999);
+  let done=false;
+  try{ done=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(done) ok(); else prompt("Copy this address:",text);
+}
+let toastT;
+function toast(msg){
+  const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1600);
+}
+
+/* ================= location ================= */
+let here=null,watchId=null,pickMode=false;
+const locateBtn=document.getElementById('locate');
+
+function setHere(lat,lng,acc,manual){
+  const first=!here;
+  here={lat,lng,acc:acc||0,manual:!!manual};
+  locateBtn.classList.add('on');
+  if(first) setView(lat,lng,Math.max(view.z,manual?view.z:9));
+  render();
+}
+function stopLocate(){
+  if(watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; }
+  here=null; pickMode=false; locateBtn.classList.remove('on'); locateBtn.textContent='\u25ce';
+  mapEl.classList.remove('pick'); render();
+}
+locateBtn.onclick=()=>{
+  if(pickMode){ pickMode=false; locateBtn.textContent='\u25ce'; mapEl.classList.remove('pick'); return; }
+  if(here||watchId!==null){ stopLocate(); return; }
+  startLocate();
+};
+function startLocate(){
+  if(!navigator.geolocation){ offerManual("This browser doesn't offer location at all."); return; }
+  toast("Finding you\u2026");
+  let answered=false;
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    answered=true;
+    setHere(pos.coords.latitude,pos.coords.longitude,pos.coords.accuracy,false);
+  },err=>{
+    if(watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; }
+    if(answered) return;
+    offerManual(err.code===1
+      ? "Location permission was refused for this page."
+      : "The GPS didn't answer in time.");
+  },{enableHighAccuracy:true,maximumAge:15000,timeout:15000});
+}
+function offerManual(reason){
+  const why = window.isSecureContext
+    ? reason
+    : reason+" Phone browsers only hand out GPS to pages loaded over https, and this file is opened straight off your device.";
+  banner("Can't read your GPS here", why+" You can set your spot by hand instead \u2014 distances and nearest-first sorting work exactly the same.<br><br>Tap <b>Set my spot</b>, then tap the map where you are.");
+  const b=document.getElementById('hint');
+  const btn=document.createElement('button');
+  btn.className='btn go'; btn.textContent='Set my spot';
+  btn.onclick=()=>{ b.remove(); enterPick(); };
+  b.appendChild(btn);
+}
+function enterPick(){
+  pickMode=true; locateBtn.textContent='\u2295'; mapEl.classList.add('pick');
+  toast("Tap the map where you are");
+}
+
+function miles(a,b){
+  const R=3958.8,rad=Math.PI/180;
+  const dLat=(b.lat-a.lat)*rad,dLng=(b.lng-a.lng)*rad;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+
+/* ================= filters, list ================= */
+const q=document.getElementById('q'),stSel=document.getElementById('state'),vSel=document.getElementById('vendor');
+[...new Set(STOPS.map(s=>s.st))].sort().forEach(v=>stSel.add(new Option(v,v)));
+[...new Set(STOPS.map(s=>s.v))].sort().forEach(v=>vSel.add(new Option(v==="JBHUNT"?"J.B. Hunt":v,v)));
+
+function matches(s){
+  const t=q.value.trim().toLowerCase();
+  if(stSel.value&&s.st!==stSel.value) return false;
+  if(vSel.value&&s.v!==vSel.value) return false;
+  if(!t) return true;
+  return (s.s+" "+s.c+" "+s.st+" "+s.a+" "+s.h+" "+s.n+" "+s.v).toLowerCase().includes(t);
+}
+function render(){
+  const rows=[];
+  visibleIdx=new Set();
+  STOPS.forEach((s,i)=>{ if(matches(s)){ visibleIdx.add(i); rows.push({s,i,d:here?miles(here,s):null}); } });
+  rows.sort((a,b)=> here ? a.d-b.d
+    : (a.s.st===b.s.st ? a.s.c.localeCompare(b.s.c) : a.s.st.localeCompare(b.s.st)));
+  document.getElementById('count').textContent=
+    rows.length+" of "+STOPS.length+" stops"+(here?" · nearest first":"");
+  const list=document.getElementById('list');
+  list.innerHTML = rows.length ? rows.map(({s,i,d})=>`
+    <div class="stop ${vclass(s.v)}">
+      ${d!==null?`<span class="dist">${fmtMi(d)}</span>`:""}
+      <h2>${esc(s.s)}</h2>
+      <div class="meta">${esc(s.c)}, ${s.st} · #${s.n}</div>
+      <div class="addr">${esc(s.a)}</div>
+      <div class="hwy">${esc(s.h)}</div>
+      <div class="acts">
+        <button class="btn" onclick="copyAddr(${i},this)">Copy address</button>
+        <button class="btn" onclick="showOnMap(${i})">Map</button>
+        <a class="btn go" target="_blank" rel="noopener" href="${mapsLink(s)}">Go</a>
+      </div>
+    </div>`).join("")+
+    `<div class="note">Pins are placed from the street address and can sit a few hundred feet off. Copy and Go use the address text, so navigation is exact.</div>`
+    : '<div class="empty">Nothing matches that. Try a city, an exit number, or clear the filters.</div>';
+  if(selected!==null&&!visibleIdx.has(selected)) closeSheet();
+  draw();
+}
+function showOnMap(i){ setTab('map'); setView(STOPS[i].lat,STOPS[i].lng,13); selectStop(i); }
+
+/* ================= tabs ================= */
+const tabMap=document.getElementById('tabMap'),tabList=document.getElementById('tabList');
+function setTab(which){
+  const isMap=which==='map';
+  tabMap.classList.toggle('on',isMap); tabList.classList.toggle('on',!isMap);
+  mapEl.classList.toggle('hidden',!isMap);
+  document.getElementById('list').classList.toggle('hidden',isMap);
+  const sh=document.getElementById('sheet'); if(sh) sh.classList.toggle('hidden',!isMap);
+  if(isMap) setTimeout(()=>{measure();draw();},30);
+}
+tabMap.onclick=()=>setTab('map');
+tabList.onclick=()=>setTab('list');
+q.addEventListener('input',render);
+stSel.addEventListener('change',render);
+vSel.addEventListener('change',render);
+
+measure();
+fitBounds(STOPS,40);
+render();
+
+</script>
+</body>
+</html>
